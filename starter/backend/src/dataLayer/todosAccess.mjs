@@ -1,76 +1,88 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { QueryCommand, PutCommand, UpdateCommand, DeleteCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import AWS from "aws-sdk";
+import AWSXRay from "aws-xray-sdk";
 import { createLogger } from "../utils/logger.mjs";
 
+const XAWS = AWSXRay.captureAWS(AWS);
 const logger = createLogger("TodoAccess");
-const urlExpiration = process.env.SIGNED_URL_EXPIRATION;
-const s3BucketName = process.env.ATTACHMENT_S3_BUCKET;
+const url_expiration = process.env.SIGNED_URL_EXPIRATION;
+const s3_bucket_name = process.env.ATTACHMENT_S3_BUCKET;
 
 export class TodosAccess {
-  constructor() {
-    this.client = new DynamoDBClient({});
-    this.docClient = DynamoDBDocumentClient.from(this.client);
-    this.todosTable = process.env.TODOS_TABLE;
-    this.todosIndex = process.env.TODOS_CREATED_AT_INDEX;
-    this.s3Client = new S3Client({});
-    this.bucketName = s3BucketName;
+  constructor(
+    docClient = createDynamoDBClient(),
+    todosTable = process.env.TODOS_TABLE,
+    todosIndex = process.env.TODOS_CREATED_AT_INDEX,
+    S3 = new XAWS.S3({ signatureVersion: "v4" }),
+    bucket_name = s3_bucket_name
+  ) {
+    this.docClient = docClient;
+    this.todosTable = todosTable;
+    this.todosIndex = todosIndex;
+    this.S3 = S3;
+    this.bucket_name = bucket_name;
   }
 
   async getAll(userId) {
     logger.info("Call function getAll");
-    const result = await this.docClient.send(new QueryCommand({
-      TableName: this.todosTable,
-      IndexName: this.todosIndex,
-      KeyConditionExpression: "userId = :userId",
-      ExpressionAttributeValues: {
-        ":userId": userId,
-      },
-    }));
+    const result = await this.docClient
+      .query({
+        TableName: this.todosTable,
+        IndexName: this.todosIndex,
+        KeyConditionExpression: "userId = :userId",
+        ExpressionAttributeValues: {
+          ":userId": userId,
+        },
+      })
+      .promise();
     return result.Items;
   }
 
   async create(item) {
     logger.info("Call function create");
-    await this.docClient.send(new PutCommand({
-      TableName: this.todosTable,
-      Item: item,
-    }));
+    await this.docClient
+      .put({
+        TableName: this.todosTable,
+        Item: item,
+      })
+      .promise();
     return item;
   }
 
   async update(userId, todoId, todoUpdate) {
     logger.info(`Updating todo item ${todoId} in ${this.todosTable}`);
     try {
-      await this.docClient.send(new UpdateCommand({
-        TableName: this.todosTable,
-        Key: {
-          userId,
-          todoId,
-        },
-        UpdateExpression: "set #name = :name, #dueDate = :dueDate, #done = :done",
-        ExpressionAttributeNames: {
-          "#name": "name",
-          "#dueDate": "dueDate",
-          "#done": "done",
-        },
-        ExpressionAttributeValues: {
-          ":name": todoUpdate.name,
-          ":dueDate": todoUpdate.dueDate,
-          ":done": todoUpdate.done,
-        },
-        ReturnValues: "UPDATED_NEW",
-      }));
+      await this.docClient
+        .update({
+          TableName: this.todosTable,
+          Key: {
+            userId,
+            todoId,
+          },
+          UpdateExpression:
+            "set #name = :name, #dueDate = :dueDate, #done = :done",
+          ExpressionAttributeNames: {
+            "#name": "name",
+            "#dueDate": "dueDate",
+            "#done": "done",
+          },
+          ExpressionAttributeValues: {
+            ":name": todoUpdate.name,
+            ":dueDate": todoUpdate.dueDate,
+            ":done": todoUpdate.done,
+          },
+          ReturnValues: "UPDATED_NEW",
+        })
+        .promise();
     } catch (error) {
       logger.error("Error updating Todo.", {
-        error: error.message,
+        error: error,
         data: {
           todoId,
           userId,
           todoUpdate,
         },
       });
-      throw new Error(error.message);
+      throw Error(error);
     }
     return todoUpdate;
   }
@@ -78,40 +90,54 @@ export class TodosAccess {
   async delete(userId, todoId) {
     logger.info(`Deleting todo item ${todoId} from ${this.todosTable}`);
     try {
-      await this.docClient.send(new DeleteCommand({
-        TableName: this.todosTable,
-        Key: {
-          userId,
-          todoId,
-        },
-      }));
+      await this.docClient
+        .delete({
+          TableName: this.todosTable,
+          Key: {
+            userId,
+            todoId,
+          },
+        })
+        .promise();
       return "success";
     } catch (e) {
-      logger.error("Error deleting Todo.", {
-        error: e.message,
-      });
+      logger.info("Error deleting Todo", { error: e });
       return "Error";
     }
   }
 
   async getUploadUrl(todoId, userId) {
-    const uploadUrl = await this.s3Client.send(new GetObjectCommand({
-      Bucket: this.bucketName,
+    const uploadUrl = this.S3.getSignedUrl("putObject", {
+      Bucket: this.bucket_name,
       Key: todoId,
-      Expires: Number(urlExpiration),
-    }));
-    await this.docClient.send(new UpdateCommand({
-      TableName: this.todosTable,
-      Key: {
-        userId,
-        todoId,
-      },
-      UpdateExpression: "set attachmentUrl = :URL",
-      ExpressionAttributeValues: {
-        ":URL": uploadUrl.split("?")[0],
-      },
-      ReturnValues: "UPDATED_NEW",
-    }));
+      Expires: Number(url_expiration),
+    });
+    await this.docClient
+      .update({
+        TableName: this.todosTable,
+        Key: {
+          userId,
+          todoId,
+        },
+        UpdateExpression: "set attachmentUrl = :URL",
+        ExpressionAttributeValues: {
+          ":URL": uploadUrl.split("?")[0],
+        },
+        ReturnValues: "UPDATED_NEW",
+      })
+      .promise();
     return uploadUrl;
   }
+}
+
+function createDynamoDBClient() {
+  if (process.env.IS_OFFLINE) {
+    console.log("Creating a local DynamoDB instance");
+    return new XAWS.DynamoDB.DocumentClient({
+      region: "localhost",
+      endpoint: "http://localhost:8000",
+    });
+  }
+
+  return new XAWS.DynamoDB.DocumentClient();
 }
