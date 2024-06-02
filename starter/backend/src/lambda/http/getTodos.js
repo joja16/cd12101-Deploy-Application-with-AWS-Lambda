@@ -8,6 +8,10 @@ export const handler = middy(async (event) => {
     const userId = getUserId(event);
     const todos = await getTodosForUser(userId);
     return {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
       statusCode: 200,
       body: JSON.stringify({ items: todos }),
     };

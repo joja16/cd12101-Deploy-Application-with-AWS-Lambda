@@ -11,6 +11,10 @@ const createTodoHandler = async (event) => {
   try {
     const newItem = await createTodo(newTodo, userId);
     return {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
       statusCode: 201,
       body: JSON.stringify({
         item: newItem,
@@ -18,6 +22,10 @@ const createTodoHandler = async (event) => {
     };
   } catch (error) {
     return {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Credentials": true,
+      },
       statusCode: 500,
       body: JSON.stringify({ Error: error }),
     };
