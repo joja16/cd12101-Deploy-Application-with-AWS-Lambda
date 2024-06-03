@@ -1,5 +1,6 @@
 import middy from "@middy/core";
 import cors from "@middy/http-cors";
+import httpErrorHandler from "@middy/http-error-handler";
 import { getTodosForUser } from "../../businessLogic/todos.mjs";
 import { getUserId } from "../utils.mjs";
 
@@ -26,4 +27,5 @@ export const handler = middy(async (event) => {
     };
   }
 })
+.use(httpErrorHandler())
 .use(cors({ credentials: true }));

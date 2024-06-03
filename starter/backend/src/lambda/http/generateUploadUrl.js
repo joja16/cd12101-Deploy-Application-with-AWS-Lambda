@@ -18,5 +18,5 @@ export const handler = middy(async (event) => {
     body: JSON.stringify({ uploadUrl: url }),
   };
 })
-  .use(httpErrorHandler())
-  .use(cors({ credentials: true }));
+.use(httpErrorHandler())
+.use(cors({ credentials: true }));
