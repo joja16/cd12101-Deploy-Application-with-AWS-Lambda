@@ -110,7 +110,7 @@ export class TodosAccess {
     const uploadUrl = this.S3.getSignedUrl("putObject", {
       Bucket: this.bucket_name,
       Key: todoId,
-      Expires: parseInt(this.url_expiration) // Ensure it's a number
+      Expires: parseInt(this.url_expiration) 
     });
   
     await this.docClient
@@ -118,7 +118,7 @@ export class TodosAccess {
         TableName: this.todosTable,
         Key: { userId, todoId },
         UpdateExpression: "set attachmentUrl = :URL",
-        ExpressionAttributeValues: { ":URL": uploadUrl.split("?")[0] }, // Get the URL without query parameters
+        ExpressionAttributeValues: { ":URL": uploadUrl.split("?")[0] }, 
         ReturnValues: "UPDATED_NEW",
       })
       .promise();
