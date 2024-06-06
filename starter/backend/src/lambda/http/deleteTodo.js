@@ -1,8 +1,8 @@
-import middy from "@middy/core";
-import cors from "@middy/http-cors";
-import { deleteTodo } from "../../businessLogic/todos.mjs"; 
-import { getUserId } from "../utils.mjs";
-import httpErrorHandler from "@middy/http-error-handler";
+import middy from '@middy/core';
+import cors from '@middy/http-cors';
+import { deleteTodo } from '../../businessLogic/todos.mjs'; 
+import { getUserId } from '../utils.mjs';
+import httpErrorHandler from '@middy/http-error-handler';
 
 export const handler = middy(async (event) => {
   const todoId = event.pathParameters.todoId;
@@ -12,17 +12,17 @@ export const handler = middy(async (event) => {
     await deleteTodo(userId, todoId);
     return {
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Credentials": true,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': true,
       },
       statusCode: 204,
-      body: "",
+      body: '',
     };
   } catch (err) {
     return {
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Credentials": true,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': true,
       },
       statusCode: 500,
       body: JSON.stringify({ Error: err }),

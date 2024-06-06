@@ -3,15 +3,15 @@ import AWSXRay from "aws-xray-sdk";
 import { createLogger } from "../utils/logger.mjs";
 
 const XAWS = AWSXRay.captureAWS(AWS);
-const logger = createLogger("TodoAccess");
-const url_expiration = process.env.SIGNED_URL_EXPIRATION;
-const s3_bucket_name = process.env.ATTACHMENT_S3_BUCKET;
+const logger = createLogger("TodosAccess");
+const url_expiration = process.env.AWS_S3_SIGNED_URL_EXPIRATION;
+const s3_bucket_name = process.env.AWS_BUCKET;
 
 export class TodosAccess {
   constructor(
     docClient = createDynamoDBClient(),
-    todosTable = process.env.TODOS_TABLE,
-    todosIndex = process.env.TODOS_CREATED_AT_INDEX,
+    todosTable = process.env.AWS_DB_APP_TABLE,
+    todosIndex = process.env.AWS_DB_INDEX_NAME,
     S3 = new XAWS.S3({ signatureVersion: "v4" }),
     bucket_name = s3_bucket_name
   ) {
@@ -110,22 +110,19 @@ export class TodosAccess {
     const uploadUrl = this.S3.getSignedUrl("putObject", {
       Bucket: this.bucket_name,
       Key: todoId,
-      Expires: Number(url_expiration),
+      Expires: parseInt(this.url_expiration) // Ensure it's a number
     });
+  
     await this.docClient
       .update({
         TableName: this.todosTable,
-        Key: {
-          userId,
-          todoId,
-        },
+        Key: { userId, todoId },
         UpdateExpression: "set attachmentUrl = :URL",
-        ExpressionAttributeValues: {
-          ":URL": uploadUrl.split("?")[0],
-        },
+        ExpressionAttributeValues: { ":URL": uploadUrl.split("?")[0] }, // Get the URL without query parameters
         ReturnValues: "UPDATED_NEW",
       })
       .promise();
+  
     return uploadUrl;
   }
 }
